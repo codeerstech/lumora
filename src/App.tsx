@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent, MouseEvent } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import {
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CreditCard,
   Heart,
   Landmark,
@@ -229,27 +232,32 @@ function Header({
         </a>
 
         <nav className="hidden flex-1 items-center justify-center gap-1 lg:flex" aria-label="Primary navigation">
-          {navGroups.map((group) => (
-            <div className="group relative" key={group.label}>
-              <button className="inline-flex items-center gap-1 rounded-[var(--radius-control)] px-4 py-3 text-sm font-black uppercase text-[var(--color-heading)] hover:bg-[var(--color-surface-soft)]" type="button">
-                {group.label}
-                <ChevronDown size={15} aria-hidden="true" />
-              </button>
-              <div className="pointer-events-none absolute left-1/2 top-full grid w-[660px] -translate-x-1/2 translate-y-2 grid-cols-[0.8fr_1.2fr] gap-5 rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] p-5 opacity-0 shadow-[var(--shadow-card)] transition group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100">
-                <div className="rounded-[var(--radius-card)] bg-[var(--color-dark)] p-5 text-white">
-                  <p className="text-xs font-black uppercase tracking-[0.22em] text-[var(--color-accent)]">{group.featured ?? 'Featured'}</p>
-                  <h2 className="mt-3 text-2xl font-black">{group.label}</h2>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {group.items.map((item) => (
-                    <a className="rounded-[var(--radius-control)] px-3 py-2 text-sm font-bold text-[var(--color-muted)] hover:bg-[var(--color-surface-soft)] hover:text-[var(--color-heading)]" href={localHref(item.href)} key={item.href}>
-                      {item.label}
-                    </a>
-                  ))}
+          {navGroups.map((group, index) => {
+            const panelAlignment =
+              index === 0
+                ? 'left-0 translate-x-0'
+                : index === navGroups.length - 1
+                  ? 'right-0 translate-x-0'
+                  : 'left-1/2 -translate-x-1/2'
+
+            return (
+              <div className="group relative" key={group.label}>
+                <button className="inline-flex items-center gap-1 rounded-[var(--radius-control)] px-4 py-3 text-sm font-black uppercase text-[var(--color-heading)] hover:bg-[var(--color-surface-soft)] group-focus-within:bg-[var(--color-surface-soft)]" type="button" aria-haspopup="true">
+                  {group.label}
+                  <ChevronDown className="transition-transform group-hover:rotate-180 group-focus-within:rotate-180" size={15} aria-hidden="true" />
+                </button>
+                <div className={`pointer-events-none absolute top-full z-50 hidden w-64 pt-2 group-hover:block group-hover:pointer-events-auto group-focus-within:block group-focus-within:pointer-events-auto ${panelAlignment}`} data-nav-menu={group.label}>
+                  <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] p-2 shadow-[var(--shadow-card)] ring-1 ring-black/5">
+                    {group.items.map((item) => (
+                      <a className="block rounded-[var(--radius-control)] px-3 py-2.5 text-sm font-black text-[var(--color-heading)] hover:bg-[var(--color-surface-soft)] hover:text-[var(--color-dark)]" href={localHref(item.href)} key={item.href}>
+                        {item.label}
+                      </a>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </nav>
 
         <div className="ml-auto flex items-center gap-2">
@@ -300,15 +308,96 @@ function Header({
 }
 
 function CategoryLink({ item }: { item: CategoryCard }) {
+  const carouselImageUrls = item.carouselImageUrls?.filter(Boolean) ?? []
+  const [carouselIndex, setCarouselIndex] = useState(0)
+
+  useEffect(() => {
+    if (carouselImageUrls.length <= 1) return undefined
+
+    const timer = window.setInterval(() => {
+      setCarouselIndex((index) => (index + 1) % carouselImageUrls.length)
+    }, 2600)
+
+    return () => window.clearInterval(timer)
+  }, [carouselImageUrls.length])
+
+  const activeImageUrl = carouselImageUrls[carouselIndex] ?? item.imageUrl
+
   return (
-    <a className="group min-w-[168px] flex-1 overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]" href={localHref(item.href)}>
-      <div className="aspect-square overflow-hidden">
-        <ImageFrame imageUrl={item.imageUrl} title={item.title} />
+    <a className="group flex-[0_0_190px] overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[var(--shadow-card)] hover:border-[var(--color-accent)] sm:flex-[0_0_216px]" href={localHref(item.href)}>
+      <div className="relative aspect-square overflow-hidden bg-[var(--color-surface-soft)]">
+        <AnimatePresence initial={false} mode="wait">
+          <motion.div
+            key={activeImageUrl || item.title}
+            className="absolute inset-0"
+            initial={{ opacity: 0, scale: 1.04 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.45, ease: 'easeOut' }}
+          >
+            <ImageFrame className="transition-transform duration-500 group-hover:scale-[1.03]" imageUrl={activeImageUrl} title={item.title} />
+          </motion.div>
+        </AnimatePresence>
       </div>
-      <span className="block px-4 py-3 text-center text-sm font-black uppercase text-[var(--color-heading)] group-hover:bg-[var(--color-dark)] group-hover:text-white">
+      <span className="block border-t border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-3 text-center text-sm font-black uppercase text-[var(--color-heading)] group-hover:border-[var(--color-accent-soft)] group-hover:bg-[var(--color-accent-soft)]">
         {item.title}
       </span>
     </a>
+  )
+}
+
+function QuickLinksCarousel({ items }: { items: CategoryCard[] }) {
+  const [startIndex, setStartIndex] = useState(0)
+  const [direction, setDirection] = useState(1)
+  const orderedItems = useMemo(
+    () => items.map((_, index) => items[(startIndex + index) % items.length]).filter(Boolean),
+    [items, startIndex],
+  )
+
+  if (items.length === 0) return null
+
+  function move(nextDirection: number) {
+    setDirection(nextDirection)
+    setStartIndex((index) => (index + nextDirection + items.length) % items.length)
+  }
+
+  return (
+    <section className="mx-auto w-[min(var(--container),calc(100%-32px))] py-8">
+      <div className="relative">
+        <button
+          className="absolute left-0 top-1/2 z-10 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-heading)] shadow-[var(--shadow-card)] hover:bg-[var(--color-dark)] hover:text-white"
+          type="button"
+          onClick={() => move(-1)}
+          aria-label="Previous category"
+        >
+          <ChevronLeft size={20} aria-hidden="true" />
+        </button>
+        <div className="overflow-hidden px-12">
+          <AnimatePresence initial={false} mode="wait">
+            <motion.div
+              className="flex gap-4"
+              key={startIndex}
+              initial={{ opacity: 0.88, x: direction > 0 ? 28 : -28 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0.88, x: direction > 0 ? -28 : 28 }}
+              transition={{ duration: 0.28, ease: 'easeOut' }}
+            >
+              {orderedItems.map((item) => (
+                <CategoryLink item={item} key={item.title} />
+              ))}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+        <button
+          className="absolute right-0 top-1/2 z-10 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-heading)] shadow-[var(--shadow-card)] hover:bg-[var(--color-dark)] hover:text-white"
+          type="button"
+          onClick={() => move(1)}
+          aria-label="Next category"
+        >
+          <ChevronRight size={20} aria-hidden="true" />
+        </button>
+      </div>
+    </section>
   )
 }
 
@@ -1154,13 +1243,7 @@ export default function App() {
           </div>
         </section>
 
-        <section className="mx-auto w-[min(var(--container),calc(100%-32px))] py-8">
-          <div className="flex gap-4 overflow-x-auto pb-3">
-            {page.quickLinks.map((item) => (
-              <CategoryLink item={item} key={item.title} />
-            ))}
-          </div>
-        </section>
+        <QuickLinksCarousel items={page.quickLinks} />
 
         <ProductRail
           wishlist={wishlist}

@@ -75,6 +75,7 @@ export type CategoryCard = {
   title: string
   href: string
   imageUrl: string
+  carouselImageUrls?: string[]
 }
 
 export type MediaBanner = {
