@@ -309,35 +309,77 @@ function Header({
 
 function CategoryLink({ item }: { item: CategoryCard }) {
   const carouselImageUrls = item.carouselImageUrls?.filter(Boolean) ?? []
-  const [carouselIndex, setCarouselIndex] = useState(0)
+  const [carouselIndex, setCarouselIndex] = useState(() =>
+    carouselImageUrls.length > 1 ? Math.floor(Math.random() * carouselImageUrls.length) : 0,
+  )
+  const [transitionEnabled, setTransitionEnabled] = useState(true)
+  const initialDelay = useMemo(() => Math.random() * 2000, [item.title])
 
   useEffect(() => {
     if (carouselImageUrls.length <= 1) return undefined
 
-    const timer = window.setInterval(() => {
-      setCarouselIndex((index) => (index + 1) % carouselImageUrls.length)
-    }, 2600)
+    let timeout: number
+    let cancelled = false
 
-    return () => window.clearInterval(timer)
-  }, [carouselImageUrls.length])
+    function scheduleNextChange(isFirstChange = false) {
+      const delay = isFirstChange ? initialDelay : 2000
 
-  const activeImageUrl = carouselImageUrls[carouselIndex] ?? item.imageUrl
+      timeout = window.setTimeout(() => {
+        setTransitionEnabled(true)
+        setCarouselIndex((index) => index + 1)
+
+        if (!cancelled) scheduleNextChange()
+      }, delay)
+    }
+
+    scheduleNextChange(true)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeout)
+    }
+  }, [carouselImageUrls.length, initialDelay])
+
+  const slideImageUrls = carouselImageUrls.length > 0 ? carouselImageUrls : [item.imageUrl]
+  const visibleSlideIndex = slideImageUrls.length > 1 ? carouselIndex % slideImageUrls.length : 0
+  const swipeImageUrls = slideImageUrls.length > 1 ? [...slideImageUrls, slideImageUrls[0]] : slideImageUrls
 
   return (
     <a className="group flex-[0_0_190px] overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[var(--shadow-card)] hover:border-[var(--color-accent)] sm:flex-[0_0_216px]" href={localHref(item.href)}>
       <div className="relative aspect-square overflow-hidden bg-[var(--color-surface-soft)]">
-        <AnimatePresence initial={false} mode="wait">
+        {slideImageUrls.length > 1 ? (
           <motion.div
-            key={activeImageUrl || item.title}
-            className="absolute inset-0"
-            initial={{ opacity: 0, scale: 1.04 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.98 }}
-            transition={{ duration: 0.45, ease: 'easeOut' }}
+            className="flex h-full w-full"
+            animate={{ x: `${carouselIndex * -100}%` }}
+            transition={transitionEnabled ? { duration: 0.55, ease: [0.22, 1, 0.36, 1] } : { duration: 0 }}
+            onAnimationComplete={() => {
+              if (carouselIndex >= slideImageUrls.length) {
+                setTransitionEnabled(false)
+                setCarouselIndex(0)
+                window.requestAnimationFrame(() => setTransitionEnabled(true))
+              }
+            }}
           >
-            <ImageFrame className="transition-transform duration-500 group-hover:scale-[1.03]" imageUrl={activeImageUrl} title={item.title} />
+            {swipeImageUrls.map((imageUrl, index) => (
+              <div className="h-full flex-[0_0_100%]" key={`${item.title}-${imageUrl}-${index}`}>
+                <ImageFrame imageUrl={imageUrl} title={item.title} />
+              </div>
+            ))}
           </motion.div>
-        </AnimatePresence>
+        ) : (
+          <ImageFrame imageUrl={slideImageUrls[0] ?? ''} title={item.title} />
+        )}
+        {slideImageUrls.length > 1 ? (
+          <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-[var(--radius-pill)] bg-black/32 px-2.5 py-1.5 backdrop-blur-sm" aria-label={`${item.title} image ${visibleSlideIndex + 1} of ${slideImageUrls.length}`}>
+            {slideImageUrls.map((imageUrl, index) => (
+              <span
+                className={`h-1.5 rounded-full transition-all duration-300 ${index === visibleSlideIndex ? 'w-5 bg-white' : 'w-1.5 bg-white/55'}`}
+                key={`${item.title}-${imageUrl}-${index}`}
+                aria-hidden="true"
+              />
+            ))}
+          </div>
+        ) : null}
       </div>
       <span className="block border-t border-[var(--color-line)] bg-[var(--color-surface)] px-4 py-3 text-center text-sm font-black uppercase text-[var(--color-heading)] group-hover:border-[var(--color-accent-soft)] group-hover:bg-[var(--color-accent-soft)]">
         {item.title}
