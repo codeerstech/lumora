@@ -11,7 +11,7 @@ export const site = {
     { label: 'Sign in', href: '#signin' },
   ],
   countries: ['United States', 'Canada', 'United Kingdom', 'Australia', 'Germany', 'France'],
-  footer: '© 2026 Lumora Camera Co. Original camera storefront prototype with placeholder-safe imagery.',
+  footer: '© 2026 Lumora Camera Co. Working camera storefront with live newsletter capture.',
 }
 
 export const navGroups: NavGroup[] = [
@@ -48,7 +48,7 @@ export const navGroups: NavGroup[] = [
     ],
   },
   {
-    label: 'Bags & More',
+    label: 'Bags',
     featured: 'Accessories',
     items: [
       { label: 'Camera Bags', href: '#categories' },

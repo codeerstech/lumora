@@ -1,6 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="CareAxis Cloud">
-  <rect width="64" height="64" rx="14" fill="#fff2e5"/>
-  <rect x="14" y="14" width="36" height="36" rx="10" fill="#bf5708"/>
-  <rect x="21" y="28" width="22" height="8" rx="3" fill="#fff"/>
-  <rect x="28" y="21" width="8" height="22" rx="3" fill="#fff"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Lumora Camera Co.">
+  <rect width="64" height="64" rx="14" fill="#101010"/>
+  <path d="M18 23h8l3-5h12l3 5h2a8 8 0 0 1 8 8v11a8 8 0 0 1-8 8H18a8 8 0 0 1-8-8V31a8 8 0 0 1 8-8Z" fill="#f5f5f0"/>
+  <circle cx="34" cy="36" r="10" fill="#101010"/>
+  <circle cx="34" cy="36" r="5" fill="#d7ff35"/>
+  <rect x="17" y="29" width="8" height="4" rx="2" fill="#101010"/>
 </svg>

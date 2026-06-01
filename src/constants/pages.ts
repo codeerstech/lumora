@@ -1,4 +1,4 @@
-import { assets } from './assets'
+import { images } from './images'
 import type { ProductCard, TemplatePage } from './types'
 
 const mirrorlessProducts: ProductCard[] = [
@@ -10,7 +10,7 @@ const mirrorlessProducts: ProductCard[] = [
     rating: '4.9 / 5',
     reviewCount: 128,
     badges: ['New', '4K'],
-    imageUrl: assets.products.ocoSilver,
+    imageUrl: images.products.novaX1Mirrorless,
   },
   {
     id: 'nova-x1-kit',
@@ -20,7 +20,7 @@ const mirrorlessProducts: ProductCard[] = [
     rating: '4.8 / 5',
     reviewCount: 84,
     badges: ['Bundle'],
-    imageUrl: assets.products.ocoBlack,
+    imageUrl: images.products.novaX1CreatorKit,
   },
   {
     id: 'pocket-cinema',
@@ -30,7 +30,7 @@ const mirrorlessProducts: ProductCard[] = [
     rating: '4.7 / 5',
     reviewCount: 56,
     badges: ['Cinema'],
-    imageUrl: assets.products.sentryGreen,
+    imageUrl: images.products.arcMiniCinema,
   },
   {
     id: 'street-compact',
@@ -40,7 +40,7 @@ const mirrorlessProducts: ProductCard[] = [
     rating: '4.6 / 5',
     reviewCount: 213,
     badges: ['Travel'],
-    imageUrl: assets.products.chronoLeather,
+    imageUrl: images.products.street35Compact,
   },
 ]
 
@@ -53,7 +53,7 @@ const lensProducts: ProductCard[] = [
     rating: '4.9 / 5',
     reviewCount: 331,
     badges: ['Fast Glass'],
-    imageUrl: assets.products.timeTellerGold,
+    imageUrl: images.products.primeLens,
   },
   {
     id: 'zoom-2470',
@@ -63,35 +63,35 @@ const lensProducts: ProductCard[] = [
     rating: '4.8 / 5',
     reviewCount: 147,
     badges: ['Pro'],
-    imageUrl: assets.products.eddyBlue,
+    imageUrl: images.products.zoomLens,
   },
 ]
 
 export const page: TemplatePage = {
   meta: {
     title: 'Lumora Camera Co.',
-    description: 'Original camera e-commerce storefront with working fake cart, wishlist, and checkout.',
+    description: 'Camera e-commerce storefront with working cart, wishlist, checkout, and live newsletter capture.',
   },
   announcements: [
     'Free camera strap with every kit',
-    'Free shipping on creator bundles',
-    'Sign up for early access to lens drops',
+    'Free gifts with every purchase',
+    'New products launching soon',
   ],
   hero: {
     eyebrow: 'Creator-ready camera kits',
     title: 'Frame the shot',
     subtitle: 'Mirrorless bodies, compact cinema tools, and glass built for travel, studio, and street work.',
     cta: { label: 'Shop Camera Kits', href: '#new-season' },
-    imageUrl: assets.heroImageUrl,
+    imageUrl: images.home.hero,
   },
   quickLinks: [
-    { title: 'Mirrorless Cameras', href: '#new-season', imageUrl: assets.categories.womens },
-    { title: 'Cinema Cameras', href: '#categories', imageUrl: assets.categories.analog },
-    { title: 'Compact Cameras', href: '#categories', imageUrl: assets.categories.digital },
-    { title: 'Creator Kits', href: '#categories', imageUrl: assets.categories.custom },
-    { title: 'Weather Sealed Gear', href: '#surf', imageUrl: assets.categories.surf },
-    { title: 'Lenses', href: '#categories', imageUrl: assets.categories.bands },
-    { title: 'Bags & Lighting', href: '#categories', imageUrl: assets.categories.headwear },
+    { title: 'Mirrorless Cameras', href: '#new-season', imageUrl: images.quickLinks.mirrorlessCameras },
+    { title: 'Cinema Cameras', href: '#categories', imageUrl: images.quickLinks.cinemaCameras },
+    { title: 'Compact Cameras', href: '#categories', imageUrl: images.quickLinks.compactCameras },
+    { title: 'Creator Kits', href: '#categories', imageUrl: images.quickLinks.creatorKits },
+    { title: 'Weather Sealed Gear', href: '#surf', imageUrl: images.quickLinks.weatherSealedGear },
+    { title: 'Lenses', href: '#categories', imageUrl: images.quickLinks.lenses },
+    { title: 'Bags', href: '#categories', imageUrl: images.quickLinks.bags },
   ],
   newSeason: {
     eyebrow: 'New this season',
@@ -117,9 +117,9 @@ export const page: TemplatePage = {
       eyebrow: 'Shoot anywhere',
       title: 'Compact gear for bright ideas and rough locations.',
       description:
-        'Use this editorial banner for launch films, creator stories, studio bundles, or seasonal camera campaigns.',
+        'Weather-ready bodies, padded packs, and compact support gear for long days on location.',
       cta: { label: 'Shop Best Sellers', href: '#new-season' },
-      imageUrl: assets.brandVideoPosterUrl,
+      imageUrl: images.banners.roughLocations,
       dark: true,
     },
   ],
@@ -138,7 +138,7 @@ export const page: TemplatePage = {
         rating: '4.8 / 5',
         reviewCount: 88,
         badges: ['Water Resistant'],
-        imageUrl: assets.products.heat,
+        imageUrl: images.products.fieldPack,
       },
       {
         id: 'travel-tripod',
@@ -148,19 +148,23 @@ export const page: TemplatePage = {
         rating: '4.7 / 5',
         reviewCount: 104,
         badges: ['Lightweight'],
-        imageUrl: assets.products.highTide,
+        imageUrl: images.products.carbonTripod,
       },
     ],
   },
   categoryCollections: {
     eyebrow: 'Shop by category',
-    title: 'Camera retail categories that are easy to swap',
-    description: 'Use the same card structure for bodies, lenses, bags, lighting, storage, and services.',
+    title: 'Bodies, lenses, bags, and support',
+    description: 'Find the core pieces for everyday shoots, studio builds, and field production.',
     items: [
-      { title: 'Mirrorless Bodies', href: '#new-season', imageUrl: assets.categories.analog },
-      { title: 'Lenses', href: '#new-season', imageUrl: assets.categories.womens },
-      { title: 'Creator Kits', href: '#categories', imageUrl: assets.categories.custom },
-      { title: 'Bags & Supports', href: '#categories', imageUrl: assets.categories.bands },
+      { title: 'Mirrorless Bodies', href: '#new-season', imageUrl: images.collections.mirrorlessBodies },
+      { title: 'Camera Lenses', href: '#new-season', imageUrl: images.collections.lensCloseUp },
+      { title: 'Lens Kits', href: '#new-season', imageUrl: images.collections.lensKit },
+      { title: 'Lens Details', href: '#new-season', imageUrl: images.collections.lensDetail },
+      { title: 'Camera Supports', href: '#surf', imageUrl: images.collections.cameraSupport },
+      { title: 'Gimbal Supports', href: '#surf', imageUrl: images.collections.waterGimbal },
+      { title: 'Support Rigs', href: '#surf', imageUrl: images.collections.supportRig },
+      { title: 'Camera Bags', href: '#surf', imageUrl: images.collections.cameraBags },
     ],
   },
   newsletter: {

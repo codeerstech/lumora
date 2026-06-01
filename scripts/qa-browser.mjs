@@ -11,6 +11,7 @@ const browser = await chromium.launch({ headless: true })
 
 for (const viewport of viewports) {
   const page = await browser.newPage({ viewport })
+  await page.addInitScript(() => window.localStorage.clear())
   const consoleErrors = []
   page.on('console', (message) => {
     if (message.type() === 'error') consoleErrors.push(message.text())
@@ -39,15 +40,32 @@ for (const viewport of viewports) {
 
   if (viewport.name === 'mobile') {
     await page.getByLabel('Open navigation').click()
-    const mobileLinkVisible = await page.locator('a[href="#new-season"]', { hasText: 'New Arrivals' }).last().isVisible()
+    const mobileLinkVisible = await page.locator('a[href="/#new-season"]', { hasText: 'New Arrivals' }).last().isVisible()
     if (!mobileLinkVisible) failures.push('mobile nav: new arrivals link not visible after menu open')
   }
+
+  const cookieVisible = await page.getByText('Cookies help us improve your visit').isVisible()
+  if (!cookieVisible) failures.push(`${viewport.name}: cookie notice did not appear`)
+  await page.getByRole('button', { name: 'Got it' }).click()
+  const cookieHidden = await page.getByText('Cookies help us improve your visit').isHidden()
+  if (!cookieHidden) failures.push(`${viewport.name}: cookie notice did not dismiss`)
 
   await page.close()
 }
 
 const interactivePage = await browser.newPage({ viewport: { width: 1280, height: 1000 } })
+await interactivePage.addInitScript(() => window.localStorage.clear())
+let leadPayload = null
+await interactivePage.route('**/api/lead', async (route) => {
+  leadPayload = route.request().postDataJSON()
+  await route.fulfill({
+    status: 201,
+    contentType: 'application/json',
+    body: JSON.stringify({ success: true, status: 'saved', data: { id: 'qa-lead' } }),
+  })
+})
 await interactivePage.goto(baseUrl, { waitUntil: 'networkidle' })
+await interactivePage.getByRole('button', { name: 'Got it' }).click()
 await interactivePage.getByLabel('Open cart').click()
 const cartVisible = await interactivePage.getByText('Your cart is ready for products.').isVisible()
 if (!cartVisible) failures.push('cart: drawer did not open')
@@ -62,9 +80,9 @@ await interactivePage.getByText('Add to Cart').first().click()
 const cartProductVisible = await interactivePage.locator('aside[aria-label="Cart drawer"] article').first().isVisible()
 const subtotalVisible = await interactivePage.getByText('Estimated tax').isVisible()
 if (!cartProductVisible || !subtotalVisible) failures.push('cart: added product or totals did not appear')
-await interactivePage.getByText('Pay with Fake Checkout').click()
-const paymentVisible = await interactivePage.getByText('Fake order placed successfully.').isVisible()
-if (!paymentVisible) failures.push('payment: fake checkout success did not appear')
+await interactivePage.getByText('Place Order').click()
+const paymentVisible = await interactivePage.getByText('Order placed successfully.').isVisible()
+if (!paymentVisible) failures.push('payment: checkout success did not appear')
 await interactivePage.getByLabel('Close cart').click()
 await interactivePage.getByText('United States').first().click()
 const countryVisible = await interactivePage.getByText('Choose your region').isVisible()
@@ -73,7 +91,26 @@ await interactivePage.getByLabel('Close country selector').click()
 await interactivePage.getByText('Compare').first().click()
 const comparedVisible = await interactivePage.getByText('Added to Compare').first().isVisible()
 if (!comparedVisible) failures.push('compare: product compare state did not toggle')
+await interactivePage.locator('input[name="email"]').fill('shopper@example.com')
+await interactivePage.locator('#newsletter button[type="submit"]').click()
+const leadSuccessNotice = interactivePage.getByText('Details saved. We will reach you shortly.').first()
+await leadSuccessNotice.waitFor({ timeout: 5000 }).catch(() => failures.push('newsletter: success state did not appear'))
+if (!leadPayload || leadPayload.niche !== 'e-commerce' || leadPayload.email !== 'shopper@example.com') {
+  failures.push('newsletter: lead payload was not submitted correctly')
+}
 await interactivePage.close()
+
+const aboutPage = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+await aboutPage.goto(`${baseUrl}/about-us`, { waitUntil: 'networkidle' })
+if (!(await aboutPage.getByText(/Meet /).first().isVisible())) failures.push('about: page did not render')
+await aboutPage.getByText('Continue Shopping').click()
+await aboutPage.waitForURL(/\/#new-season$/)
+await aboutPage.close()
+
+const privacyPage = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+await privacyPage.goto(`${baseUrl}/privacy-policy`, { waitUntil: 'networkidle' })
+if (!(await privacyPage.getByRole('heading', { name: 'Privacy Policy' }).isVisible())) failures.push('privacy: page did not render')
+await privacyPage.close()
 
 await browser.close()
 
