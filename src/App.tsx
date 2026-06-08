@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent, MouseEvent } from 'react'
+import useEmblaCarousel from 'embla-carousel-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   Check,
@@ -31,11 +32,18 @@ type CartItem = {
   quantity: number
 }
 
-type RoutePath = '/' | '/checkout' | '/about-us' | '/privacy-policy'
+type RoutePath = '/' | '/checkout' | '/about-us' | '/contact-us' | '/privacy-policy'
 
 type CheckoutField = 'fullName' | 'email' | 'phone' | 'address' | 'city' | 'state' | 'postalCode' | 'country'
 
 type CheckoutDetails = Record<CheckoutField, string>
+
+type FeedbackToast = {
+  id: number
+  title: string
+  message: string
+  tone: 'cart' | 'wishlist'
+}
 
 type StaticPageContent = {
   metaTitle: string
@@ -49,7 +57,7 @@ type StaticPageContent = {
   }>
 }
 
-const routePaths = new Set<RoutePath>(['/', '/checkout', '/about-us', '/privacy-policy'])
+const routePaths = new Set<RoutePath>(['/', '/checkout', '/about-us', '/contact-us', '/privacy-policy'])
 
 const staticPages: Record<Exclude<RoutePath, '/' | '/checkout'>, StaticPageContent> = {
   '/about-us': {
@@ -71,6 +79,28 @@ const staticPages: Record<Exclude<RoutePath, '/' | '/checkout'>, StaticPageConte
       {
         title: 'Our standard',
         body: 'Every page is designed to feel direct, trustworthy, and easy to use across desktop and mobile screens.',
+      },
+    ],
+  },
+  '/contact-us': {
+    metaTitle: `Contact Us | ${site.brand.name}`,
+    metaDescription: `${site.brand.name} contact page for camera kit guidance, order support, studio recommendations, and product questions.`,
+    eyebrow: 'Contact us',
+    title: 'Camera guidance without the guesswork',
+    description:
+      'Reach out for kit recommendations, order questions, lens pairing help, studio setup advice, or product availability support.',
+    sections: [
+      {
+        title: 'Sales and kit advice',
+        body: 'Tell us what you shoot, your budget, and whether you need travel, studio, cinema, or everyday camera gear. We will point you toward the right setup.',
+      },
+      {
+        title: 'Order support',
+        body: 'Share your order context and the support team can help with checkout questions, delivery details, product availability, and post-purchase follow-up.',
+      },
+      {
+        title: 'Studio and creator requests',
+        body: 'For larger creator kits, field rigs, lens bundles, or studio setups, include your preferred camera body and production needs so the recommendation is practical.',
       },
     ],
   },
@@ -98,6 +128,7 @@ const staticPages: Record<Exclude<RoutePath, '/' | '/checkout'>, StaticPageConte
   },
 }
 
+
 const taxRate = 0.05
 const deliveryRate = 0.04
 
@@ -118,6 +149,10 @@ function localHref(href: string) {
 
 function projectKey() {
   return site.brand.shortName.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+}
+
+function storageKey(name: string) {
+  return `${projectKey()}-${name}`
 }
 
 function getRoutePath(): RoutePath {
@@ -150,6 +185,16 @@ function cartTotals(items: CartItem[]) {
     tax,
     delivery,
     total: subtotal + tax + delivery,
+  }
+}
+
+function readStoredJson<T>(key: string, fallback: T): T {
+  if (typeof window === 'undefined') return fallback
+  try {
+    const value = window.localStorage.getItem(key)
+    return value ? (JSON.parse(value) as T) : fallback
+  } catch {
+    return fallback
   }
 }
 
@@ -249,7 +294,7 @@ function Header({
                 <div className={`pointer-events-none absolute top-full z-50 hidden w-64 pt-2 group-hover:block group-hover:pointer-events-auto group-focus-within:block group-focus-within:pointer-events-auto ${panelAlignment}`} data-nav-menu={group.label}>
                   <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] p-2 shadow-[var(--shadow-card)] ring-1 ring-black/5">
                     {group.items.map((item) => (
-                      <a className="block rounded-[var(--radius-control)] px-3 py-2.5 text-sm font-black text-[var(--color-heading)] hover:bg-[var(--color-surface-soft)] hover:text-[var(--color-dark)]" href={localHref(item.href)} key={item.href}>
+                      <a className="block rounded-[var(--radius-control)] px-3 py-2.5 text-sm font-black text-[var(--color-heading)] hover:bg-[var(--color-surface-soft)] hover:text-[var(--color-dark)]" href={localHref(item.href)} key={`${group.label}-${item.label}-${item.href}`}>
                         {item.label}
                       </a>
                     ))}
@@ -283,7 +328,7 @@ function Header({
               <summary className="cursor-pointer list-none text-base font-black uppercase text-[var(--color-heading)]">{group.label}</summary>
               <div className="mt-2 grid gap-1">
                 {group.items.map((item) => (
-                  <a className="rounded-[var(--radius-control)] px-3 py-2 font-bold text-[var(--color-muted)]" href={localHref(item.href)} key={item.href} onClick={() => setMobileOpen(false)}>
+                  <a className="rounded-[var(--radius-control)] px-3 py-2 font-bold text-[var(--color-muted)]" href={localHref(item.href)} key={`${group.label}-${item.label}-${item.href}`} onClick={() => setMobileOpen(false)}>
                     {item.label}
                   </a>
                 ))}
@@ -389,55 +434,61 @@ function CategoryLink({ item }: { item: CategoryCard }) {
 }
 
 function QuickLinksCarousel({ items }: { items: CategoryCard[] }) {
-  const [startIndex, setStartIndex] = useState(0)
-  const [direction, setDirection] = useState(1)
-  const orderedItems = useMemo(
-    () => items.map((_, index) => items[(startIndex + index) % items.length]).filter(Boolean),
-    [items, startIndex],
-  )
+  const [emblaRef, emblaApi] = useEmblaCarousel({ align: 'start', containScroll: 'trimSnaps', dragFree: true })
+  const [selectedIndex, setSelectedIndex] = useState(0)
+  const [scrollSnaps, setScrollSnaps] = useState<number[]>([])
+
+  const onSelect = useCallback(() => {
+    if (!emblaApi) return
+    setSelectedIndex(emblaApi.selectedScrollSnap())
+  }, [emblaApi])
+
+  useEffect(() => {
+    if (!emblaApi) return undefined
+    setScrollSnaps(emblaApi.scrollSnapList())
+    emblaApi.on('select', onSelect)
+    onSelect()
+    return () => {
+      emblaApi.off('select', onSelect)
+    }
+  }, [emblaApi, onSelect])
 
   if (items.length === 0) return null
 
-  function move(nextDirection: number) {
-    setDirection(nextDirection)
-    setStartIndex((index) => (index + nextDirection + items.length) % items.length)
-  }
-
   return (
     <section className="mx-auto w-[min(var(--container),calc(100%-32px))] py-8">
-      <div className="relative">
+      <div className="relative" aria-label="Shop featured categories">
         <button
           className="absolute left-0 top-1/2 z-10 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-heading)] shadow-[var(--shadow-card)] hover:bg-[var(--color-dark)] hover:text-white"
           type="button"
-          onClick={() => move(-1)}
+          onClick={() => emblaApi?.scrollPrev()}
           aria-label="Previous category"
         >
           <ChevronLeft size={20} aria-hidden="true" />
         </button>
-        <div className="overflow-hidden px-12">
-          <AnimatePresence initial={false} mode="wait">
-            <motion.div
-              className="flex gap-4"
-              key={startIndex}
-              initial={{ opacity: 0.88, x: direction > 0 ? 28 : -28 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0.88, x: direction > 0 ? -28 : 28 }}
-              transition={{ duration: 0.28, ease: 'easeOut' }}
-            >
-              {orderedItems.map((item) => (
+        <div className="overflow-hidden px-12" ref={emblaRef}>
+          <div className="flex gap-4">
+              {items.map((item) => (
                 <CategoryLink item={item} key={item.title} />
               ))}
-            </motion.div>
-          </AnimatePresence>
+          </div>
         </div>
         <button
           className="absolute right-0 top-1/2 z-10 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-heading)] shadow-[var(--shadow-card)] hover:bg-[var(--color-dark)] hover:text-white"
           type="button"
-          onClick={() => move(1)}
+          onClick={() => emblaApi?.scrollNext()}
           aria-label="Next category"
         >
           <ChevronRight size={20} aria-hidden="true" />
         </button>
+      </div>
+      <div className="mt-4 flex justify-center gap-2" aria-hidden="true">
+        {scrollSnaps.map((_, index) => (
+          <span
+            className={`h-1.5 rounded-full transition-all duration-300 ${index === selectedIndex ? 'w-8 bg-[var(--color-dark)]' : 'w-2 bg-[var(--color-line)]'}`}
+            key={index}
+          />
+        ))}
       </div>
     </section>
   )
@@ -454,10 +505,20 @@ function ProductCardView({
   onAddToCart: () => void
   onToggleWishlist: () => void
 }) {
+  const [isAdding, setIsAdding] = useState(false)
+
+  function handleAddToCart() {
+    setIsAdding(true)
+    onAddToCart()
+    window.setTimeout(() => setIsAdding(false), 900)
+  }
+
   return (
-    <article className="relative overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
-      <button className={`absolute right-3 top-3 z-10 grid h-10 w-10 place-items-center rounded-full bg-white/92 ${wished ? 'text-[var(--color-sale)]' : 'text-[var(--color-heading)]'}`} type="button" onClick={onToggleWishlist} aria-label={`${wished ? 'Remove from' : 'Save to'} wishlist ${product.title}`}>
-        <Heart size={18} className={wished ? 'fill-[var(--color-sale)]' : ''} />
+    <motion.article layout className="group relative overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
+      <button className={`absolute right-3 top-3 z-10 grid h-10 w-10 place-items-center rounded-full bg-white/92 shadow-sm ${wished ? 'text-[var(--color-sale)] ring-2 ring-[var(--color-sale)]/18' : 'text-[var(--color-heading)]'}`} type="button" onClick={onToggleWishlist} aria-label={`${wished ? 'Remove from' : 'Save to'} wishlist ${product.title}`}>
+        <motion.span animate={wished ? { scale: [1, 1.22, 1] } : { scale: 1 }} transition={{ duration: 0.32 }}>
+          <Heart size={18} className={wished ? 'fill-[var(--color-sale)]' : ''} />
+        </motion.span>
       </button>
       <div className="absolute left-3 top-3 z-10 flex flex-wrap gap-2">
         {product.badges.map((badge) => (
@@ -466,7 +527,7 @@ function ProductCardView({
           </span>
         ))}
       </div>
-      <div className="aspect-square">
+      <div className="aspect-square overflow-hidden">
         <ImageFrame imageUrl={product.imageUrl} title={product.title} />
       </div>
       <div className="p-5">
@@ -481,12 +542,12 @@ function ProductCardView({
           <strong className="text-lg font-black text-[var(--color-heading)]">{product.price}</strong>
           {product.compareAt ? <span className="text-sm font-bold text-[var(--color-sale)] line-through">{product.compareAt}</span> : null}
         </div>
-        <button className="mt-5 flex w-full items-center justify-center gap-2 rounded-[var(--radius-pill)] bg-[var(--color-dark)] px-4 py-3 text-sm font-black uppercase text-white" type="button" onClick={onAddToCart}>
-          <ShoppingBag size={17} />
-          Add to Cart
+        <button className={`mt-5 flex w-full items-center justify-center gap-2 rounded-[var(--radius-pill)] px-4 py-3 text-sm font-black uppercase text-white ${isAdding ? 'bg-[var(--color-accent)] text-[var(--color-dark)]' : 'bg-[var(--color-dark)]'}`} type="button" onClick={handleAddToCart} aria-live="polite">
+          {isAdding ? <Check size={17} /> : <ShoppingBag size={17} />}
+          {isAdding ? 'Added' : 'Add to Cart'}
         </button>
       </div>
-    </article>
+    </motion.article>
   )
 }
 
@@ -524,7 +585,7 @@ function ProductRail({
 }: {
   wishlist: Set<string>
   onAddToCart: (product: ProductCard) => void
-  onToggleWishlist: (id: string) => void
+  onToggleWishlist: (product: ProductCard) => void
 }) {
   const [activeTab, setActiveTab] = useState(page.newSeason.tabs[0]?.label ?? '')
   const active = page.newSeason.tabs.find((tab) => tab.label === activeTab) ?? page.newSeason.tabs[0]
@@ -547,7 +608,7 @@ function ProductRail({
             product={product}
             wished={wishlist.has(product.id)}
             onAddToCart={() => onAddToCart(product)}
-            onToggleWishlist={() => onToggleWishlist(product.id)}
+            onToggleWishlist={() => onToggleWishlist(product)}
           />
         ))}
       </div>
@@ -592,15 +653,18 @@ function CartDrawer({
   onIncrement: (product: ProductCard) => void
   onRemove: (id: string) => void
 }) {
-  if (!open) return null
-
   const totals = cartTotals(items)
 
   return (
-    <aside className="fixed inset-0 z-50 bg-black/45" aria-label="Cart drawer">
-      <div className="ml-auto flex h-full w-full max-w-lg flex-col bg-[var(--color-surface)] shadow-[var(--shadow-drawer)]">
+    <AnimatePresence>
+      {open ? (
+    <motion.aside className="fixed inset-0 z-50 bg-black/45 backdrop-blur-[2px]" aria-label="Cart drawer" role="dialog" aria-modal="true" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+      <motion.div className="ml-auto flex h-full w-full max-w-lg flex-col bg-[var(--color-surface)] shadow-[var(--shadow-drawer)]" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', stiffness: 320, damping: 34 }}>
         <div className="flex items-center justify-between border-b border-[var(--color-line)] p-5">
-          <strong className="text-xl font-black uppercase text-[var(--color-heading)]">Cart</strong>
+          <div>
+            <strong className="text-xl font-black uppercase text-[var(--color-heading)]">Cart</strong>
+            <p className="mt-1 text-sm font-bold text-[var(--color-muted)]">{items.length} saved line {items.length === 1 ? 'item' : 'items'}</p>
+          </div>
           <button className="grid h-10 w-10 place-items-center rounded-[var(--radius-control)] border border-[var(--color-line)]" type="button" onClick={onClose} aria-label="Close cart">
             <X size={18} />
           </button>
@@ -617,7 +681,7 @@ function CartDrawer({
           ) : null}
           <div className="space-y-4">
             {items.map((item) => (
-              <article className="grid grid-cols-[88px_1fr] gap-4 rounded-[var(--radius-card)] border border-[var(--color-line)] p-3" key={item.product.id}>
+              <motion.article layout className="grid grid-cols-[88px_1fr] gap-4 rounded-[var(--radius-card)] border border-[var(--color-line)] p-3" key={item.product.id}>
                 <div className="overflow-hidden rounded-[var(--radius-control)]">
                   <ImageFrame imageUrl={item.product.imageUrl} title={item.product.title} />
                 </div>
@@ -644,7 +708,7 @@ function CartDrawer({
                     <strong>{money(priceValue(item.product.price) * item.quantity)}</strong>
                   </div>
                 </div>
-              </article>
+              </motion.article>
             ))}
           </div>
         </div>
@@ -671,8 +735,10 @@ function CartDrawer({
             Checkout
           </button>
         </div>
-      </div>
-    </aside>
+      </motion.div>
+    </motion.aside>
+      ) : null}
+    </AnimatePresence>
   )
 }
 
@@ -689,13 +755,16 @@ function WishlistDrawer({
   onClose: () => void
   onRemove: (id: string) => void
 }) {
-  if (!open) return null
-
   return (
-    <aside className="fixed inset-0 z-50 bg-black/45" aria-label="Wishlist drawer">
-      <div className="ml-auto flex h-full w-full max-w-lg flex-col bg-[var(--color-surface)] shadow-[var(--shadow-drawer)]">
+    <AnimatePresence>
+      {open ? (
+    <motion.aside className="fixed inset-0 z-50 bg-black/45 backdrop-blur-[2px]" aria-label="Wishlist drawer" role="dialog" aria-modal="true" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+      <motion.div className="ml-auto flex h-full w-full max-w-lg flex-col bg-[var(--color-surface)] shadow-[var(--shadow-drawer)]" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', stiffness: 320, damping: 34 }}>
         <div className="flex items-center justify-between border-b border-[var(--color-line)] p-5">
-          <strong className="text-xl font-black uppercase text-[var(--color-heading)]">Wishlist</strong>
+          <div>
+            <strong className="text-xl font-black uppercase text-[var(--color-heading)]">Wishlist</strong>
+            <p className="mt-1 text-sm font-bold text-[var(--color-muted)]">{products.length} product {products.length === 1 ? 'saved' : 'shortlisted'}</p>
+          </div>
           <button className="grid h-10 w-10 place-items-center rounded-[var(--radius-control)] border border-[var(--color-line)]" type="button" onClick={onClose} aria-label="Close wishlist">
             <X size={18} />
           </button>
@@ -712,7 +781,7 @@ function WishlistDrawer({
           ) : null}
           <div className="space-y-4">
             {products.map((product) => (
-              <article className="grid grid-cols-[112px_1fr] gap-4 rounded-[var(--radius-card)] border border-[var(--color-line)] bg-white p-3 shadow-[var(--shadow-card)]" key={product.id}>
+              <motion.article layout className="grid grid-cols-[112px_1fr] gap-4 rounded-[var(--radius-card)] border border-[var(--color-line)] bg-white p-3 shadow-[var(--shadow-card)]" key={product.id}>
                 <div className="aspect-square overflow-hidden rounded-[var(--radius-control)] bg-[var(--color-surface-soft)]">
                   <ImageFrame imageUrl={product.imageUrl} title={product.title} />
                 </div>
@@ -739,12 +808,14 @@ function WishlistDrawer({
                     </button>
                   </div>
                 </div>
-              </article>
+              </motion.article>
             ))}
           </div>
         </div>
-      </div>
-    </aside>
+      </motion.div>
+    </motion.aside>
+      ) : null}
+    </AnimatePresence>
   )
 }
 
@@ -870,12 +941,30 @@ function NewsletterForm() {
 
 function StaticPage({ content }: { content: StaticPageContent }) {
   return (
-    <section className="bg-[var(--color-background)] py-16">
-      <div className="mx-auto w-[min(900px,calc(100%-32px))]">
-        <p className="mb-3 text-xs font-black uppercase tracking-[0.22em] text-[var(--color-muted)]">{content.eyebrow}</p>
-        <h1 className="text-5xl font-black uppercase leading-tight text-[var(--color-heading)] md:text-7xl">{content.title}</h1>
-        <p className="mt-5 text-lg leading-8 text-[var(--color-muted)]">{content.description}</p>
-        <div className="mt-10 grid gap-5">
+    <section className="bg-[var(--color-background)]">
+      <div className="bg-[var(--color-dark)] text-white">
+        <div className="mx-auto grid w-[min(var(--container),calc(100%-32px))] items-end gap-10 py-16 lg:grid-cols-[1fr_0.72fr]">
+          <div>
+            <p className="mb-3 text-xs font-black uppercase tracking-[0.22em] text-[var(--color-accent)]">{content.eyebrow}</p>
+            <h1 className="text-5xl font-black uppercase leading-tight md:text-7xl">{content.title}</h1>
+            <p className="mt-5 max-w-3xl text-lg leading-8 text-white/72">{content.description}</p>
+          </div>
+          <div className="rounded-[var(--radius-card)] border border-white/15 bg-white/8 p-5">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-[var(--color-accent)]">Support promise</p>
+            <p className="mt-3 text-2xl font-black leading-tight">Clear product guidance, responsive follow-up, and shopping flows built around confidence.</p>
+          </div>
+        </div>
+      </div>
+      <div className="mx-auto w-[min(var(--container),calc(100%-32px))] py-14">
+        <div className="grid gap-4 sm:grid-cols-3">
+          {['Curated kits', 'Responsive support', 'Secure checkout flow'].map((label) => (
+            <div className="rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-card)]" key={label}>
+              <p className="text-3xl font-black text-[var(--color-heading)]">✓</p>
+              <p className="mt-2 text-sm font-black uppercase tracking-[0.14em] text-[var(--color-muted)]">{label}</p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-8 grid gap-5 lg:grid-cols-3">
           {content.sections.map((section) => (
             <article className="rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] p-6 shadow-[var(--shadow-card)]" key={section.title}>
               <h2 className="text-2xl font-black text-[var(--color-heading)]">{section.title}</h2>
@@ -883,9 +972,14 @@ function StaticPage({ content }: { content: StaticPageContent }) {
             </article>
           ))}
         </div>
-        <a className="mt-10 inline-flex rounded-[var(--radius-pill)] bg-[var(--color-dark)] px-6 py-4 text-sm font-black uppercase text-white" href="/#new-season">
-          Continue Shopping
-        </a>
+        <div className="mt-10 flex flex-wrap gap-3">
+          <a className="inline-flex rounded-[var(--radius-pill)] bg-[var(--color-dark)] px-6 py-4 text-sm font-black uppercase text-white" href="/#new-season">
+            Continue Shopping
+          </a>
+          <a className="inline-flex rounded-[var(--radius-pill)] border border-[var(--color-line)] px-6 py-4 text-sm font-black uppercase text-[var(--color-heading)]" href="/contact-us">
+            Contact Support
+          </a>
+        </div>
       </div>
     </section>
   )
@@ -907,8 +1001,14 @@ function CheckoutPage({
   paymentMethod: string
 }) {
   const [checkoutMessage, setCheckoutMessage] = useState('')
+  const [orderReference, setOrderReference] = useState('')
   const totals = cartTotals(items)
   const isAddressComplete = Object.values(checkoutDetails).every((value) => value.trim().length > 0)
+  const checkoutSteps = [
+    { label: 'Cart', complete: items.length > 0 },
+    { label: 'Delivery', complete: isAddressComplete },
+    { label: 'Payment', complete: Boolean(paymentMethod) },
+  ]
   const paymentMethods = [
     { id: 'upi', label: 'UPI', icon: Smartphone },
     { id: 'card', label: 'Card', icon: CreditCard },
@@ -918,7 +1018,8 @@ function CheckoutPage({
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!isAddressComplete || !paymentMethod) return
-    setCheckoutMessage('Checkout details saved. Your order is ready for review.')
+    setOrderReference(`${site.brand.shortName.toUpperCase()}-${Date.now().toString().slice(-6)}`)
+    setCheckoutMessage('Checkout complete. Your order is ready for fulfilment review.')
   }
 
   if (items.length === 0) {
@@ -943,10 +1044,22 @@ function CheckoutPage({
           <div>
             <p className="mb-2 text-xs font-black uppercase tracking-[0.22em] text-[var(--color-muted)]">Checkout</p>
             <h1 className="text-4xl font-black uppercase text-[var(--color-heading)] md:text-6xl">Review your order</h1>
+            <p className="mt-3 max-w-2xl text-[var(--color-muted)]">Complete delivery, choose a payment method, and review totals before the final handoff.</p>
           </div>
           <button className="inline-flex w-fit rounded-[var(--radius-pill)] border border-[var(--color-line)] px-5 py-3 text-sm font-black uppercase text-[var(--color-heading)]" type="button" onClick={onBackToCart}>
             Edit Cart
           </button>
+        </div>
+
+        <div className="mb-6 grid gap-3 rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)] sm:grid-cols-3">
+          {checkoutSteps.map((step, index) => (
+            <div className={`flex items-center gap-3 rounded-[var(--radius-control)] px-4 py-3 ${step.complete ? 'bg-[var(--color-accent-soft)] text-[var(--color-heading)]' : 'bg-[var(--color-surface-soft)] text-[var(--color-muted)]'}`} key={step.label}>
+              <span className={`grid h-8 w-8 place-items-center rounded-full text-sm font-black ${step.complete ? 'bg-[var(--color-accent)] text-[var(--color-dark)]' : 'bg-white text-[var(--color-muted)]'}`}>
+                {step.complete ? <Check size={16} /> : index + 1}
+              </span>
+              <strong className="text-sm uppercase">{step.label}</strong>
+            </div>
+          ))}
         </div>
 
         <form className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]" onSubmit={handleSubmit}>
@@ -1066,11 +1179,44 @@ function CheckoutPage({
                 <button className="mt-2 rounded-[var(--radius-pill)] bg-[var(--color-accent)] px-5 py-4 text-sm font-black uppercase text-[var(--color-dark)] disabled:cursor-not-allowed disabled:opacity-50" type="submit" disabled={!paymentMethod}>
                   Complete Checkout
                 </button>
-                {checkoutMessage ? (
-                  <p className="rounded-[var(--radius-control)] bg-[var(--color-surface-soft)] px-4 py-3 text-sm font-black text-[var(--color-heading)]" role="status">
-                    {checkoutMessage}
-                  </p>
-                ) : null}
+                <AnimatePresence>
+                  {checkoutMessage ? (
+                    <motion.div
+                      className="rounded-[var(--radius-card)] border border-[var(--color-accent)] bg-[var(--color-accent-soft)] p-4 text-sm font-bold text-[var(--color-heading)]"
+                      role="status"
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 8 }}
+                    >
+                      <div className="mb-3 flex items-center gap-3">
+                        <span className="grid h-9 w-9 place-items-center rounded-full bg-[var(--color-accent)] text-[var(--color-dark)]">
+                          <Check size={18} />
+                        </span>
+                        <div>
+                          <p className="font-black uppercase">{checkoutMessage}</p>
+                          <p className="text-[var(--color-muted)]">Reference {orderReference}</p>
+                        </div>
+                      </div>
+                      <div className="grid gap-2 rounded-[var(--radius-control)] bg-white/70 p-3">
+                        <div className="flex justify-between gap-3">
+                          <span>Payment</span>
+                          <strong className="uppercase">{paymentMethod}</strong>
+                        </div>
+                        <div className="flex justify-between gap-3">
+                          <span>Delivery estimate</span>
+                          <strong>3-5 business days</strong>
+                        </div>
+                        <div className="flex justify-between gap-3">
+                          <span>Order total</span>
+                          <strong>{money(totals.total)}</strong>
+                        </div>
+                      </div>
+                      <a className="mt-4 inline-flex rounded-[var(--radius-pill)] bg-[var(--color-dark)] px-5 py-3 text-xs font-black uppercase text-white" href="/#new-season">
+                        Continue Shopping
+                      </a>
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
               </div>
             ) : (
               <div className="mt-5 rounded-[var(--radius-control)] bg-[var(--color-surface-soft)] p-4 text-sm font-bold leading-6 text-[var(--color-muted)]">
@@ -1081,6 +1227,36 @@ function CheckoutPage({
         </form>
       </div>
     </section>
+  )
+}
+
+function ActionFeedbackToast({ toast }: { toast: FeedbackToast | null }) {
+  return (
+    <AnimatePresence>
+      {toast ? (
+        <motion.div
+          className="fixed bottom-5 left-1/2 z-[60] w-[min(420px,calc(100%-32px))] -translate-x-1/2 rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] p-3 shadow-[var(--shadow-drawer)]"
+          role="status"
+          aria-live="polite"
+          initial={{ opacity: 0, y: 24, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 18, scale: 0.98 }}
+          transition={{ duration: 0.24, ease: 'easeOut' }}
+          key={toast.id}
+        >
+          <div className="flex items-center gap-3">
+            <div className={`relative grid h-12 w-12 shrink-0 place-items-center rounded-full ${toast.tone === 'cart' ? 'bg-[var(--color-accent-soft)]' : 'bg-red-50'}`}>
+              <span className="absolute inset-0 rounded-full bg-[var(--color-accent)]/30 animate-[toast-pulse_900ms_ease-out_1]" aria-hidden="true" />
+              <Check className="relative text-[var(--color-heading)]" size={22} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-black uppercase text-[var(--color-heading)]">{toast.message}</p>
+              <p className="truncate text-sm font-bold text-[var(--color-muted)]">{toast.title}</p>
+            </div>
+          </div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
   )
 }
 
@@ -1119,6 +1295,8 @@ export default function App() {
   const [selectedCountry, setSelectedCountry] = useState(site.countries[0] ?? 'United States')
   const [checkoutDetails, setCheckoutDetails] = useState<CheckoutDetails>(emptyCheckoutDetails)
   const [paymentMethod, setPaymentMethod] = useState('')
+  const [hydrated, setHydrated] = useState(false)
+  const [feedbackToast, setFeedbackToast] = useState<FeedbackToast | null>(null)
   const [wishlist, setWishlist] = useState<Set<string>>(new Set())
   const [cart, setCart] = useState<CartItem[]>([])
   const cssVars = useMemo(() => themeStyle(), [])
@@ -1128,6 +1306,42 @@ export default function App() {
   )
   const wishlistProducts = allProducts.filter((product) => wishlist.has(product.id))
   const cartCount = cart.reduce((count, item) => count + item.quantity, 0)
+
+  useEffect(() => {
+    const storedCart = readStoredJson<Array<{ id: string; quantity: number }>>(storageKey('cart'), [])
+    const storedWishlist = readStoredJson<string[]>(storageKey('wishlist'), [])
+    const productsById = new Map(allProducts.map((product) => [product.id, product]))
+
+    setCart(
+      storedCart
+        .map((item) => {
+          const product = productsById.get(item.id)
+          return product ? { product, quantity: Math.max(1, item.quantity) } : null
+        })
+        .filter((item): item is CartItem => Boolean(item)),
+    )
+    setWishlist(new Set(storedWishlist.filter((id) => productsById.has(id))))
+    setHydrated(true)
+  }, [allProducts])
+
+  useEffect(() => {
+    if (!hydrated) return
+    window.localStorage.setItem(
+      storageKey('cart'),
+      JSON.stringify(cart.map((item) => ({ id: item.product.id, quantity: item.quantity }))),
+    )
+  }, [cart, hydrated])
+
+  useEffect(() => {
+    if (!hydrated) return
+    window.localStorage.setItem(storageKey('wishlist'), JSON.stringify([...wishlist]))
+  }, [hydrated, wishlist])
+
+  useEffect(() => {
+    if (!feedbackToast) return undefined
+    const timer = window.setTimeout(() => setFeedbackToast(null), 2600)
+    return () => window.clearTimeout(timer)
+  }, [feedbackToast])
 
   useEffect(() => {
     const staticContent = route !== '/' && route !== '/checkout' ? staticPages[route] : null
@@ -1156,11 +1370,20 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState)
   }, [])
 
-  function toggleWishlist(id: string) {
+  function showFeedback(title: string, message: string, tone: FeedbackToast['tone']) {
+    setFeedbackToast({ id: Date.now(), title, message, tone })
+  }
+
+  function toggleWishlistProduct(product: ProductCard) {
     setWishlist((current) => {
       const next = new Set(current)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      if (next.has(product.id)) {
+        next.delete(product.id)
+        showFeedback(product.title, 'Removed from wishlist', 'wishlist')
+      } else {
+        next.add(product.id)
+        showFeedback(product.title, 'Saved to wishlist', 'wishlist')
+      }
       return next
     })
   }
@@ -1175,6 +1398,7 @@ export default function App() {
       }
       return [...current, { product, quantity: 1 }]
     })
+    showFeedback(product.title, 'Added to cart', 'cart')
     setCartOpen(true)
   }
 
@@ -1290,7 +1514,7 @@ export default function App() {
         <ProductRail
           wishlist={wishlist}
           onAddToCart={addToCart}
-          onToggleWishlist={toggleWishlist}
+          onToggleWishlist={toggleWishlistProduct}
         />
 
         {page.brandBanners.map((banner) => (
@@ -1306,7 +1530,7 @@ export default function App() {
                 product={product}
                 wished={wishlist.has(product.id)}
                 onAddToCart={() => addToCart(product)}
-                onToggleWishlist={() => toggleWishlist(product.id)}
+                onToggleWishlist={() => toggleWishlistProduct(product)}
               />
             ))}
           </div>
@@ -1347,7 +1571,7 @@ export default function App() {
               <div key={group.label}>
                 <h3 className="mb-3 text-sm font-black uppercase tracking-[0.18em] text-[var(--color-accent)]">{group.label}</h3>
                 {group.items.slice(0, 4).map((item) => (
-                  <a className="mb-2 block text-sm text-white/72" href={localHref(item.href)} key={item.href}>
+                  <a className="mb-2 block text-sm text-white/72" href={localHref(item.href)} key={`${group.label}-${item.label}-${item.href}`}>
                     {item.label}
                   </a>
                 ))}
@@ -1356,6 +1580,7 @@ export default function App() {
             <div>
               <h3 className="mb-3 text-sm font-black uppercase tracking-[0.18em] text-[var(--color-accent)]">Company</h3>
               <a className="mb-2 block text-sm text-white/72" href="/about-us">About Us</a>
+              <a className="mb-2 block text-sm text-white/72" href="/contact-us">Contact Us</a>
               <a className="mb-2 block text-sm text-white/72" href="/privacy-policy">Privacy Policy</a>
             </div>
           </div>
@@ -1376,7 +1601,10 @@ export default function App() {
         products={wishlistProducts}
         onAddToCart={addWishlistProductToCart}
         onClose={() => setWishlistOpen(false)}
-        onRemove={toggleWishlist}
+        onRemove={(id) => {
+          const product = allProducts.find((item) => item.id === id)
+          if (product) toggleWishlistProduct(product)
+        }}
       />
       <CountrySelector
         open={countryOpen}
@@ -1384,6 +1612,7 @@ export default function App() {
         onClose={() => setCountryOpen(false)}
         onSelect={selectCountry}
       />
+      <ActionFeedbackToast toast={feedbackToast} />
       <CookieNotice />
     </div>
   )
